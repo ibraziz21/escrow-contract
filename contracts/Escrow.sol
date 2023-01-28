@@ -8,6 +8,7 @@ contract escrowContract {
     error InsufficientFunds();
 
     event amountEscrowed(address Sender, address _receiver, uint amtEscrowed);
+    event txComplete(uint _txId);
     uint private txCounter;
     address private admin;
     IERC20 private currency;
@@ -21,11 +22,12 @@ contract escrowContract {
    struct Escrow {
         uint amount;
         IERC20 currencyStored;
+        address sender;
         address receiver;
         bool ItemDelivered;
         bool received;
    }
-   mapping (address => Escrow) public escrowDetails;
+   mapping (uint => Escrow) public escrowDetails;
     constructor(address initialCurrency) {
         admin = msg.sender;
         currency = IERC20(initialCurrency);
@@ -50,13 +52,26 @@ contract escrowContract {
         if(currency.balanceOf(msg.sender)<_amount) revert InsufficientFunds();
        (bool success) = currency.transferFrom(msg.sender,address(this), _amount);
        if(success){
-            Escrow storage escrow = escrowDetails[msg.sender];
+            txCounter++;
+            Escrow storage escrow = escrowDetails[txCounter];
+            escrow.sender = msg.sender;
             escrow.receiver = _receiver;
             escrow.amount = _amount;
             escrow.currencyStored = currency;
 
             emit amountEscrowed(msg.sender, _receiver, _amount);
 
+       }
+      function receivedItems(uint txID) external{
+            Escrow storage escrow = escrowDetails[txID];
+            if(escrow.sender!=msg.sender) revert NotAuthorized();
+            escrow.ItemDelivered = true;
+            escrow.received = true;
+            uint amount = escrow.amount;
+            address receiver = escrow.receiver;
+            currency.transfer(receiver, amount);
+
+            emit txComplete(txID);
        }
 
     }
